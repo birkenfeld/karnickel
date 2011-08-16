@@ -5,12 +5,11 @@
 
     Test for karnickel, AST macros for Python.
 
-    :copyright: Copyright 2010 by Georg Brandl.
+    :copyright: Copyright 2010, 2011 by Georg Brandl.
     :license: BSD, see LICENSE for details.
 """
 
 import ast
-import sys
 from textwrap import dedent
 
 from karnickel import *
