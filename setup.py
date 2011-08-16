@@ -5,7 +5,7 @@ long_desc = open('README').read()
 
 setup(
     name='karnickel',
-    version='0.1',
+    version='0.2',
     url='http://dev.pocoo.org/',
     download_url='http://pypi.python.org/pypi/karnickel',
     license='BSD',
@@ -15,7 +15,7 @@ setup(
     long_description=long_desc,
     zip_safe=False,
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',

@@ -5,7 +5,7 @@
 
     AST macros for Python.
 
-    :copyright: Copyright 2010 by Georg Brandl.
+    :copyright: Copyright 2010, 2011 by Georg Brandl.
     :license: BSD, see LICENSE for details.
 """
 
@@ -82,6 +82,21 @@ def import_macros(module, names, dict):
     return macros
 
 
+def fix_locations(node, old_node):
+    """Replace all code locations (lineno and col_offset) with the one from
+    *old_node* (we cannot preserve original location information for code from
+    macros since the compiler cannot know that it's from different files.
+    """
+    def _fix(node, lineno, col_offset):
+        node.lineno = lineno
+        node.col_offset = col_offset
+        for child in ast.iter_child_nodes(node):
+            _fix(child, lineno, col_offset)
+    _fix(node, old_node.lineno, old_node.col_offset)
+    return node
+
+
+
 class MacroCallError(Exception):
     """Raised when an invalid macro call is encountered."""
 
@@ -134,9 +149,7 @@ class CallTransformer(ast.NodeTransformer):
         node = self.generic_visit(node)
         if self.body and isinstance(node.value, ast.Name) and \
            node.value.id == '__body__':
-            new_node = ast.fix_missing_locations(ast.If(ast.Num(1),
-                                                        self.body, []))
-            return new_node
+            return fix_locations(ast.If(ast.Num(1), self.body, []), node)
 
 
 class BodyVisitor(ast.NodeVisitor):
@@ -189,7 +202,7 @@ class BlockMacroDef(object):
             raise MacroCallError(node, 'invalid number of arguments')
         stmts = deepcopy(self.stmts)
         argdict = dict(izip(self.args, call_args))
-        new_node = ast.fix_missing_locations(ast.If(ast.Num(1), stmts, []))
+        new_node = fix_locations(ast.If(ast.Num(1), stmts, []), node)
         return CallTransformer(argdict, body).visit(new_node)
 
 
@@ -198,8 +211,9 @@ class Expander(ast.NodeTransformer):
     AST visitor that expands macros.
     """
 
-    def __init__(self, module, macro_definitions=None):
+    def __init__(self, module, macro_definitions=None, debug=False):
         self.module = module
+        self.debug=debug
         self.defs = macro_definitions or {}
 
     def visit_ImportFrom(self, node):
@@ -227,7 +241,10 @@ class Expander(ast.NodeTransformer):
             if not macro_def.has_body:
                 raise MacroCallError(node, 'macro has no __body__ substitution')
             return macro_def.expand(node, expr.args, expanded_body)
-        return node
+        else:
+            new_node = ast.With(node.context_expr, node.optional_vars, expanded_body)
+            new_node.lineno, new_node.col_offset = node.lineno, node.col_offset
+            return new_node
 
     def _handle_call(self, node, macrotype):
         if node.keywords or node.starargs or node.kwargs:
@@ -246,7 +263,7 @@ class Expander(ast.NodeTransformer):
            isinstance(value.func, ast.Name) and value.func.id in self.defs:
             ret = self._handle_call(value, (ExprMacroDef, BlockMacroDef))
             if isinstance(ret, ast.expr):
-                ret = ast.fix_missing_locations(ast.Expr(ret))
+                ret = fix_locations(ast.Expr(ret), node)
             return ret
         return node
 
@@ -303,7 +320,7 @@ class MacroImporter(object):
                 module.__path__ = newpath
             tree = ast.parse(code)
             try:
-                transformed = Expander(module).visit(tree)
+                transformed = Expander(module, debug=name=='domination.gameengine').visit(tree)
             except MacroCallError, err:
                 err.add_filename(filename)
                 raise
